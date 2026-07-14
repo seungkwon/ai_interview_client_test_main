@@ -10,3 +10,4 @@ backend/models/
 .agents/
 request_trace.log
 posture_trace.log
+scripts/.run/
