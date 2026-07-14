@@ -96,6 +96,29 @@ try {
     & docker @composeArguments
     if ($LASTEXITCODE -ne 0) { throw "Failed to start Docker Compose services." }
 
+    Write-Host "Applying backend database migrations..." -ForegroundColor Yellow
+    $migrationSucceeded = $false
+    Push-Location $backendDirectory
+    try {
+        foreach ($attempt in 1..15) {
+            & $python -m alembic upgrade head
+            if ($LASTEXITCODE -eq 0) {
+                $migrationSucceeded = $true
+                break
+            }
+            if ($attempt -lt 15) {
+                Write-Host "Database is not ready yet. Retrying ($attempt/15)..."
+                Start-Sleep -Seconds 2
+            }
+        }
+    }
+    finally {
+        Pop-Location
+    }
+    if (-not $migrationSucceeded) {
+        throw "Failed to apply backend database migrations."
+    }
+
     $backendArgs = @("-m", "uvicorn", "app.main:app", "--reload")
     if ($env:BACKEND_HOST) { $backendArgs += @("--host", $env:BACKEND_HOST) }
     if ($env:BACKEND_PORT) { $backendArgs += @("--port", $env:BACKEND_PORT) }

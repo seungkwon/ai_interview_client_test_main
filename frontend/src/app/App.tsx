@@ -61,6 +61,12 @@ type ServerAnalysisResult = {
   questionSequenceNo: number;
 };
 
+type LocalGpuInfo = {
+  renderer: string;
+  api: string;
+  accelerated: boolean;
+};
+
 function clamp01(value: number): number {
   return Math.max(0, Math.min(1, value));
 }
@@ -106,7 +112,13 @@ export function App() {
   const [serverMediaPipeRuntime, setServerMediaPipeRuntime] = useState<MediaPipeRuntime>("cpu");
   const [averageInferenceMs, setAverageInferenceMs] = useState(0);
   const [analysisFps, setAnalysisFps] = useState(0);
+  const [cameraResolution, setCameraResolution] = useState("-");
   const [serverAnalysisResult, setServerAnalysisResult] = useState<ServerAnalysisResult | null>(null);
+  const [localGpuInfo, setLocalGpuInfo] = useState<LocalGpuInfo>({
+    renderer: "감지 중",
+    api: "확인 중",
+    accelerated: false,
+  });
   const [activityLog, setActivityLog] = useState<string[]>([
     "화면 준비 완료. 백엔드 연결을 기다리는 중입니다.",
   ]);
@@ -135,6 +147,23 @@ export function App() {
 
   useEffect(() => {
     void loadInitialData();
+    const canvas = document.createElement("canvas");
+    const webgl2 = canvas.getContext("webgl2");
+    const context = webgl2 ?? canvas.getContext("webgl");
+    if (!context) {
+      setLocalGpuInfo({ renderer: "사용할 수 없음", api: "WebGL 미지원", accelerated: false });
+    } else {
+      const debugInfo = context.getExtension("WEBGL_debug_renderer_info");
+      const renderer = debugInfo
+        ? String(context.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL))
+        : String(context.getParameter(context.RENDERER));
+      const softwareRenderer = /swiftshader|software|llvmpipe/i.test(renderer);
+      setLocalGpuInfo({
+        renderer,
+        api: webgl2 ? "WebGL 2" : "WebGL 1",
+        accelerated: !softwareRenderer,
+      });
+    }
     return () => {
       stopCamera();
     };
@@ -371,6 +400,11 @@ export function App() {
         videoRef.current.srcObject = stream;
         await videoRef.current.play().catch(() => undefined);
       }
+      const videoTrack = stream.getVideoTracks()[0];
+      const trackSettings = videoTrack?.getSettings();
+      const width = trackSettings?.width ?? videoRef.current?.videoWidth;
+      const height = trackSettings?.height ?? videoRef.current?.videoHeight;
+      setCameraResolution(width && height ? `${width} × ${height}` : "확인할 수 없음");
       setCameraState("ready");
       const initialMode =
         postureModePreferenceRef.current === "force-server" ? "server" : "local";
@@ -420,6 +454,7 @@ export function App() {
     setPostureMode(postureModeRef.current);
     setAverageInferenceMs(0);
     setAnalysisFps(0);
+    setCameraResolution("-");
     inferenceSamplesRef.current = [];
     processedAtSamplesRef.current = [];
     postureSampleCountRef.current = 0;
@@ -1336,17 +1371,34 @@ export function App() {
             </div>
             <div className="camera-insights-panel">
             <div className="session-summary camera-summary">
-              <div>
+              <div className="camera-summary-status-card">
                 <span>상태</span>
-                <strong>{postureStatus}</strong>
+                <strong className="camera-summary-message" title={postureStatus}>
+                  {postureStatus}
+                </strong>
+                <small className="camera-summary-speed camera-summary-inference-speed">
+                  추론 속도: {averageInferenceMs > 0 ? `${Math.round(averageInferenceMs)} ms` : "-"}
+                </small>
               </div>
               <div>
                 <span>전송 샘플</span>
                 <strong>{postureSampleCount}</strong>
               </div>
               <div>
+                <span>카메라 해상도</span>
+                <strong>{cameraResolution}</strong>
+              </div>
+              <div className="camera-summary-status-card">
                 <span>오버레이</span>
-                <strong>{overlayEnabled ? overlayStatus : "오버레이가 꺼져 있습니다."}</strong>
+                <strong
+                  className="camera-summary-message"
+                  title={overlayEnabled ? overlayStatus : "오버레이가 꺼져 있습니다."}
+                >
+                  {overlayEnabled ? overlayStatus : "오버레이가 꺼져 있습니다."}
+                </strong>
+                <small className="camera-summary-speed">
+                  분석 속도: {analysisFps > 0 ? `${analysisFps.toFixed(1)} FPS` : "-"}
+                </small>
               </div>
               <div>
                 <span>분석 모드</span>
@@ -1358,29 +1410,17 @@ export function App() {
                 <span>자세분석</span>
                 <strong>{postureModePreferenceLabel}</strong>
               </div>
-              <div>
-                <span>평균 추론</span>
-                <strong>{averageInferenceMs > 0 ? `${Math.round(averageInferenceMs)} ms` : "-"}</strong>
+              <div className="camera-summary-gpu-card">
+                <span>로컬 GPU</span>
+                <strong title={localGpuInfo.renderer}>{localGpuInfo.renderer}</strong>
               </div>
-              <div>
-                <span>분석 FPS</span>
-                <strong>{analysisFps > 0 ? analysisFps.toFixed(1) : "-"}</strong>
+              <div className="camera-summary-gpu-card">
+                <span>그래픽 API</span>
+                <strong>{localGpuInfo.api}</strong>
               </div>
-              <div>
-                <span>서버 결과</span>
-                <strong>{serverAnalysisResult?.status ?? "-"}</strong>
-              </div>
-              <div>
-                <span>저장 이벤트</span>
-                <strong>{serverAnalysisResult ? serverAnalysisResult.storedEventCount : "-"}</strong>
-              </div>
-              <div>
-                <span>마지막 저장</span>
-                <strong>
-                  {serverAnalysisResult
-                    ? `Q${serverAnalysisResult.questionSequenceNo} ${serverAnalysisResult.syncedAtLabel}`
-                    : "-"}
-                </strong>
+              <div className="camera-summary-gpu-card">
+                <span>GPU 가속</span>
+                <strong>{localGpuInfo.accelerated ? `활성 (${mediaPipeRuntimeLabel})` : "비활성"}</strong>
               </div>
             </div>
             <div className="session-summary camera-summary camera-summary-runtime">
@@ -1555,7 +1595,7 @@ export function App() {
           </div>
         </article>
 
-        <article className="panel">
+        <article className="panel panel-activity">
           <div className="panel-heading">
             <p className="panel-kicker">관리</p>
             <h2>실행 현황</h2>

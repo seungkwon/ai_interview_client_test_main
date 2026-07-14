@@ -1,6 +1,6 @@
 from functools import lru_cache
 
-from pydantic import Field, field_validator
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -15,8 +15,8 @@ class Settings(BaseSettings):
     app_name: str = "AI Interview v2 API"
     backend_host: str = "0.0.0.0"
     backend_port: int = 8000
-    cors_origins: list[str] = Field(
-        default_factory=lambda: ["http://localhost:5173", "null"],
+    cors_origins_value: str = Field(
+        default="http://localhost:5173,null",
         validation_alias="BACKEND_CORS_ORIGINS",
     )
 
@@ -37,12 +37,9 @@ class Settings(BaseSettings):
     redis_port: int = 56379
     posture_sample_fps: int = 5
 
-    @field_validator("cors_origins", mode="before")
-    @classmethod
-    def parse_cors_origins(cls, value: object) -> object:
-        if isinstance(value, str):
-            return [origin.strip() for origin in value.split(",") if origin.strip()]
-        return value
+    @property
+    def cors_origins(self) -> list[str]:
+        return [origin.strip() for origin in self.cors_origins_value.split(",") if origin.strip()]
 
     @property
     def database_url(self) -> str:
