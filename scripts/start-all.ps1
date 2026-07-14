@@ -63,16 +63,26 @@ if (-not (Test-Path $python)) {
 }
 
 if (-not (Test-Path $python)) {
-    throw "Backend 가상환경이 없습니다: $python`nREADME의 Backend Setup을 먼저 수행하세요."
+    throw "Backend virtual environment is unavailable: $python"
 }
 if (-not $npm) {
-    throw "npm.cmd를 찾지 못했습니다. Node.js/npm이 PATH에 있는지 확인하세요."
+    throw "npm.cmd was not found. Install Node.js/npm and ensure it is in PATH."
 }
 if (-not $docker) {
-    throw "docker.exe를 찾지 못했습니다. Docker Desktop이 설치되어 있고 PATH에 있는지 확인하세요."
+    throw "docker.exe was not found. Install Docker Desktop and ensure it is in PATH."
 }
 if (-not (Test-Path (Join-Path $frontendDirectory "node_modules"))) {
-    throw "Frontend 의존성이 없습니다. frontend 폴더에서 npm install을 먼저 실행하세요."
+    Write-Host "Frontend dependencies not found. Running npm install..." -ForegroundColor Yellow
+    Push-Location $frontendDirectory
+    try {
+        & $npm install
+        if ($LASTEXITCODE -ne 0) {
+            throw "Failed to install frontend dependencies."
+        }
+    }
+    finally {
+        Pop-Location
+    }
 }
 
 Import-DotEnv $envFile
@@ -84,7 +94,7 @@ try {
     if (Test-Path $envFile) { $composeArguments += @("--env-file", $envFile) }
     $composeArguments += @("-f", $composeFile, "up", "-d")
     & docker @composeArguments
-    if ($LASTEXITCODE -ne 0) { throw "Docker Compose 시작에 실패했습니다." }
+    if ($LASTEXITCODE -ne 0) { throw "Failed to start Docker Compose services." }
 
     $backendArgs = @("-m", "uvicorn", "app.main:app", "--reload")
     if ($env:BACKEND_HOST) { $backendArgs += @("--host", $env:BACKEND_HOST) }
@@ -105,10 +115,10 @@ try {
 
     $backendPort = if ($env:BACKEND_PORT) { $env:BACKEND_PORT } else { "8000" }
     $frontendUrl = if ($env:FRONTEND_DEV_SERVER_URL) { $env:FRONTEND_DEV_SERVER_URL } else { "http://localhost:5173" }
-    Write-Host "모든 서비스를 시작했습니다." -ForegroundColor Green
+    Write-Host "All services started." -ForegroundColor Green
     Write-Host "  Backend : http://localhost:$backendPort"
     Write-Host "  Frontend: $frontendUrl"
-    Write-Host "정지: .\scripts\stop-all.ps1"
+    Write-Host "Stop: .\scripts\stop-all.cmd"
 }
 catch {
     foreach ($process in $started) {
