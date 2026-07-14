@@ -26,6 +26,8 @@ const LOCAL_RECOVERY_THRESHOLD_MS = 140;
 const MIN_ANALYSIS_FPS = 4;
 const RECOVERY_ANALYSIS_FPS = 5;
 const POSTURE_PERF_WINDOW = 12;
+const CAMERA_CAPTURE_WIDTH = 640;
+const CAMERA_CAPTURE_HEIGHT = 360;
 const POSE_WASM_URL = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision/wasm";
 const POSE_MODEL_URL =
   "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task";
@@ -389,8 +391,8 @@ export function App() {
       await createOrRefreshPoseLandmarker();
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
+          width: { ideal: CAMERA_CAPTURE_WIDTH, max: CAMERA_CAPTURE_WIDTH },
+          height: { ideal: CAMERA_CAPTURE_HEIGHT, max: CAMERA_CAPTURE_HEIGHT },
           facingMode: "user",
         },
         audio: false,
