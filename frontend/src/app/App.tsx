@@ -26,8 +26,6 @@ const LOCAL_RECOVERY_THRESHOLD_MS = 140;
 const MIN_ANALYSIS_FPS = 4;
 const RECOVERY_ANALYSIS_FPS = 5;
 const POSTURE_PERF_WINDOW = 12;
-const CAMERA_CAPTURE_WIDTH = 640;
-const CAMERA_CAPTURE_HEIGHT = 360;
 const POSE_WASM_URL = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision/wasm";
 const POSE_MODEL_URL =
   "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task";
@@ -56,6 +54,7 @@ type PostureMode = "local" | "server";
 type PostureModePreference = "auto" | "force-local" | "force-server";
 type MediaPipeDelegatePreference = "auto" | "gpu" | "cpu";
 type MediaPipeRuntime = "gpu" | "cpu" | "loading";
+type CameraCaptureWidth = 640 | 1920;
 type ServerAnalysisResult = {
   status: string;
   storedEventCount: number;
@@ -115,6 +114,7 @@ export function App() {
   const [averageInferenceMs, setAverageInferenceMs] = useState(0);
   const [analysisFps, setAnalysisFps] = useState(0);
   const [cameraResolution, setCameraResolution] = useState("-");
+  const [cameraCaptureWidth, setCameraCaptureWidth] = useState<CameraCaptureWidth>(640);
   const [serverAnalysisResult, setServerAnalysisResult] = useState<ServerAnalysisResult | null>(null);
   const [localGpuInfo, setLocalGpuInfo] = useState<LocalGpuInfo>({
     renderer: "감지 중",
@@ -375,7 +375,7 @@ export function App() {
     }
   }
 
-  async function startCamera() {
+  async function startCamera(captureWidth: CameraCaptureWidth = cameraCaptureWidth) {
     if (!navigator.mediaDevices?.getUserMedia) {
       setCameraState("error");
       setCameraError("이 환경에서는 웹캠 접근을 지원하지 않습니다.");
@@ -389,10 +389,11 @@ export function App() {
 
     try {
       await createOrRefreshPoseLandmarker();
+      const captureHeight = captureWidth === 1920 ? 1080 : 360;
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
-          width: { ideal: CAMERA_CAPTURE_WIDTH, max: CAMERA_CAPTURE_WIDTH },
-          height: { ideal: CAMERA_CAPTURE_HEIGHT, max: CAMERA_CAPTURE_HEIGHT },
+          width: { ideal: captureWidth, max: captureWidth },
+          height: { ideal: captureHeight, max: captureHeight },
           facingMode: "user",
         },
         audio: false,
@@ -436,6 +437,14 @@ export function App() {
       setPostureStatus("실시간 자세 샘플링을 위해 카메라 권한이 필요합니다.");
       setOverlayStatus("자세 오버레이를 시작하지 못했습니다.");
       appendLog("카메라 연결에 실패했습니다.");
+    }
+  }
+
+  function handleCameraResolutionChange(nextWidth: CameraCaptureWidth) {
+    setCameraCaptureWidth(nextWidth);
+    if (cameraState === "ready") {
+      stopCamera();
+      void startCamera(nextWidth);
     }
   }
 
@@ -1447,6 +1456,19 @@ export function App() {
             </div>
             {cameraError ? <p className="camera-error">{cameraError}</p> : null}
             <div className="action-row camera-action-row">
+              <label className="compact-field camera-resolution-field">
+                <span>카메라 해상도</span>
+                <select
+                  value={cameraCaptureWidth}
+                  onChange={(event) =>
+                    handleCameraResolutionChange(Number(event.target.value) as CameraCaptureWidth)
+                  }
+                  disabled={cameraState === "requesting"}
+                >
+                  <option value={1920}>1920 × 1080</option>
+                  <option value={640}>640 × 360</option>
+                </select>
+              </label>
               <button
                 type="button"
                 onClick={() => void startCamera()}
