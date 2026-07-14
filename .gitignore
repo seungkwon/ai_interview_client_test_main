@@ -1,0 +1,12 @@
+.env
+__pycache__/
+*.py[cod]
+.venv/
+node_modules/
+dist/
+dist-electron/
+.DS_Store
+backend/models/
+.agents/
+request_trace.log
+posture_trace.log
